@@ -27,7 +27,7 @@
 
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg);azyu
+    background: var(--bg);
     color: var(--text);
     line-height: 1.5;
     min-height: 100vh;
@@ -489,6 +489,7 @@
 <script>
 const API = '/api/data';
 let charts = {};
+let currentRange = 'today';
 
 // --- Date helpers ---
 function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -896,6 +897,7 @@ function renderCompressDailyChart(dailySavings) {
 async function loadDashboard(range) {
   document.getElementById('loading').style.display = 'flex';
   document.getElementById('content').style.display = 'none';
+  document.getElementById('compressDetailView').style.display = 'none';
   try {
     const [data, compressData] = await Promise.all([
       fetchData(range),
@@ -1036,7 +1038,6 @@ document.addEventListener('click', (e) => {
 });
 
 // --- Event Handlers ---
-let currentRange = 'today';
 
 document.querySelectorAll('[data-range]').forEach(btn => {
   btn.addEventListener('click', () => {
