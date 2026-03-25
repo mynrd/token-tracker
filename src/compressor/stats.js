@@ -15,7 +15,7 @@ function getLogPath() {
   return path.join(dir, "compress-log.jsonl");
 }
 
-function buildStats(originalText, compressedText, command, ruleName) {
+function buildStats(originalText, compressedText, command, ruleName, project) {
   const originalChars = originalText.length;
   const compressedChars = compressedText.length;
   const originalLines = originalText.split("\n").length;
@@ -31,6 +31,7 @@ function buildStats(originalText, compressedText, command, ruleName) {
     timestamp: new Date().toISOString(),
     command: command || "unknown",
     rule: ruleName || "generic",
+    project: project || process.cwd(),
     original: { chars: originalChars, lines: originalLines, tokens: originalTokens },
     compressed: { chars: compressedChars, lines: compressedLines, tokens: compressedTokens },
     saved: { chars: originalChars - compressedChars, lines: originalLines - compressedLines, tokens: savedTokens },
@@ -120,4 +121,18 @@ function summarizeDaily(entries) {
   return Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-module.exports = { estimateTokens, buildStats, logStats, readLog, summarize, summarizeDaily, getLogPath };
+function summarizeByProject(entries) {
+  if (!entries.length) return [];
+  const byProject = {};
+  for (const e of entries) {
+    const p = e.project || "unknown";
+    if (!byProject[p]) byProject[p] = { project: p, runs: 0, savedTokens: 0, originalTokens: 0, compressedTokens: 0 };
+    byProject[p].runs++;
+    byProject[p].savedTokens += e.saved.tokens;
+    byProject[p].originalTokens += e.original.tokens;
+    byProject[p].compressedTokens += e.compressed.tokens;
+  }
+  return Object.values(byProject).sort((a, b) => b.savedTokens - a.savedTokens);
+}
+
+module.exports = { estimateTokens, buildStats, logStats, readLog, summarize, summarizeDaily, summarizeByProject, getLogPath };

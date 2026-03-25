@@ -41,7 +41,7 @@ function compressOutput(text, command = "", options = {}) {
 
   // Log stats unless disabled
   if (options.log !== false) {
-    const stats = buildStats(text, result, command, ruleName);
+    const stats = buildStats(text, result, command, ruleName, options.project);
     logStats(stats);
   }
 

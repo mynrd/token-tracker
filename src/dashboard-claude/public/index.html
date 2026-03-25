@@ -27,7 +27,7 @@
 
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg);
+    background: var(--bg);azyu
     color: var(--text);
     line-height: 1.5;
     min-height: 100vh;
@@ -271,6 +271,73 @@
     z-index: 1;
   }
 
+  /* Project cards grid */
+  .project-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+
+  .project-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+
+  .project-card:hover {
+    border-color: var(--accent);
+    background: var(--border);
+  }
+
+  .project-card .pc-name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .project-card .pc-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .project-card .pc-stats .pc-saved {
+    color: var(--green);
+    font-weight: 600;
+  }
+
+  /* Back link */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 16px;
+    transition: opacity 0.15s;
+  }
+
+  .back-link:hover { opacity: 0.8; }
+
+  .detail-project-name {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--text);
+    word-break: break-all;
+  }
+
   .loading {
     display: flex;
     align-items: center;
@@ -396,7 +463,25 @@
             <div class="table-wrap" id="compressRecent"></div>
           </div>
         </div>
+        <!-- Projects box -->
+        <div style="margin-top:20px;">
+          <h2 style="font-size:12px;">Projects</h2>
+          <div class="project-cards" id="compressProjects"></div>
+        </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Compression Detail View (hidden by default) -->
+<div class="container" id="compressDetailView" style="display:none;">
+  <a href="/" class="back-link">&larr; Back to Dashboard</a>
+  <div class="detail-project-name" id="detailProjectName"></div>
+  <div class="cards" id="detailCards" style="margin-bottom:20px;"></div>
+  <div class="grid full" style="margin-bottom:16px;">
+    <div class="panel">
+      <h2>All Compressions</h2>
+      <div class="table-wrap" id="detailTable"></div>
     </div>
   </div>
 </div>
@@ -748,6 +833,23 @@ function renderCompressStats(data, totalCost) {
     html += '</tbody></table>';
     document.getElementById('compressRecent').innerHTML = html;
   }
+
+  // Projects box
+  if (data.byProject && data.byProject.length) {
+    let html = '';
+    for (const p of data.byProject) {
+      const pctSaved = p.originalTokens > 0 ? Math.round((p.savedTokens / p.originalTokens) * 100) : 0;
+      const encodedProject = encodeURIComponent(p.project);
+      html += `<a class="project-card" href="/compression?project=${encodedProject}">
+        <div class="pc-name" title="${p.project}">${shortProject(p.project)}</div>
+        <div class="pc-stats">
+          <span>${p.runs} runs</span>
+          <span class="pc-saved">${fmtNum(p.savedTokens)} saved (${pctSaved}%)</span>
+        </div>
+      </a>`;
+    }
+    document.getElementById('compressProjects').innerHTML = html;
+  }
 }
 
 function renderCompressDailyChart(dailySavings) {
@@ -814,6 +916,125 @@ async function loadDashboard(range) {
   document.getElementById('content').style.display = 'block';
 }
 
+// --- Compression Detail View ---
+async function loadCompressionDetail(project, range) {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('content').style.display = 'none';
+  document.getElementById('compressDetailView').style.display = 'none';
+  try {
+    const params = new URLSearchParams();
+    params.set('project', project);
+    if (range.from) params.set('from', range.from);
+    if (range.to) params.set('to', range.to);
+    const res = await fetch(`/api/compress-stats?${params}`);
+    const data = await res.json();
+    renderCompressionDetail(project, data);
+  } catch (e) {
+    console.error('Failed to load compression detail:', e);
+  }
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('compressDetailView').style.display = 'block';
+}
+
+function renderCompressionDetail(project, data) {
+  document.getElementById('detailProjectName').textContent = project;
+
+  // Summary cards
+  const s = data.summary;
+  if (s) {
+    const pctSaved = s.overallSavingsPercent || 0;
+    document.getElementById('detailCards').innerHTML = `
+      <div class="card savings">
+        <div class="label">Tokens Saved</div>
+        <div class="value">${fmtNum(s.totalSavedTokens)}</div>
+        <div class="sub">${pctSaved}% compression rate</div>
+      </div>
+      <div class="card">
+        <div class="label">Total Runs</div>
+        <div class="value">${s.totalRuns.toLocaleString()}</div>
+        <div class="sub">${fmtNum(s.totalOriginalTokens)} original tokens</div>
+      </div>
+      <div class="card">
+        <div class="label">After Compression</div>
+        <div class="value">${fmtNum(s.totalCompressedTokens)}</div>
+        <div class="sub">${fmtNum(s.totalSavedTokens)} tokens eliminated</div>
+      </div>
+    `;
+  }
+
+  // All compressions table
+  if (data.recent && data.recent.length) {
+    let html = '<table><thead><tr><th>Time</th><th>Command</th><th>Before</th><th>After</th><th style="text-align:right">Saved</th></tr></thead><tbody>';
+    for (const r of data.recent) {
+      const d = new Date(r.timestamp);
+      const localTime = d.toLocaleString([], { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+      html += `<tr>
+        <td>${localTime}</td>
+        <td title="${r.command || ''}">${r.command || '?'}</td>
+        <td class="num">${fmtNum(r.original.tokens)}</td>
+        <td class="num">${fmtNum(r.compressed.tokens)}</td>
+        <td class="num" style="color:var(--green)">${fmtNum(r.saved.tokens)} (${r.savingsPercent}%)</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('detailTable').innerHTML = html;
+  } else {
+    document.getElementById('detailTable').innerHTML = '<p style="color:var(--text2);padding:20px;">No compression data for this project</p>';
+  }
+}
+
+// --- Routing ---
+function getRouteInfo() {
+  const url = new URL(window.location.href);
+  if (url.pathname === '/compression') {
+    return { view: 'compression', project: url.searchParams.get('project') };
+  }
+  return { view: 'dashboard' };
+}
+
+function initRoute() {
+  const route = getRouteInfo();
+  if (route.view === 'compression' && route.project) {
+    loadCompressionDetail(route.project, getRange(currentRange));
+  } else {
+    loadDashboard(getRange('today'));
+  }
+}
+
+// Handle browser back/forward
+window.addEventListener('popstate', () => {
+  const route = getRouteInfo();
+  if (route.view === 'compression' && route.project) {
+    loadCompressionDetail(route.project, getRange(currentRange));
+  } else {
+    document.getElementById('compressDetailView').style.display = 'none';
+    loadDashboard(getRange(currentRange));
+  }
+});
+
+// Intercept project card clicks for SPA navigation
+document.addEventListener('click', (e) => {
+  const card = e.target.closest('.project-card');
+  if (card) {
+    e.preventDefault();
+    const href = card.getAttribute('href');
+    history.pushState(null, '', href);
+    const url = new URL(href, window.location.origin);
+    const project = url.searchParams.get('project');
+    if (project) {
+      loadCompressionDetail(project, getRange(currentRange));
+    }
+  }
+  // Handle back link
+  const backLink = e.target.closest('.back-link');
+  if (backLink) {
+    e.preventDefault();
+    history.pushState(null, '', '/');
+    document.getElementById('compressDetailView').style.display = 'none';
+    loadDashboard(getRange(currentRange));
+  }
+});
+
 // --- Event Handlers ---
 let currentRange = 'today';
 
@@ -824,7 +1045,12 @@ document.querySelectorAll('[data-range]').forEach(btn => {
     currentRange = btn.dataset.range;
     document.getElementById('fromDate').value = '';
     document.getElementById('toDate').value = '';
-    loadDashboard(getRange(currentRange));
+    const route = getRouteInfo();
+    if (route.view === 'compression' && route.project) {
+      loadCompressionDetail(route.project, getRange(currentRange));
+    } else {
+      loadDashboard(getRange(currentRange));
+    }
   });
 });
 
@@ -833,7 +1059,13 @@ document.getElementById('applyRange').addEventListener('click', () => {
   const to = document.getElementById('toDate').value;
   if (from || to) {
     document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
-    loadDashboard({ from, to: to || todayStr() });
+    const range = { from, to: to || todayStr() };
+    const route = getRouteInfo();
+    if (route.view === 'compression' && route.project) {
+      loadCompressionDetail(route.project, range);
+    } else {
+      loadDashboard(range);
+    }
   }
 });
 
@@ -845,11 +1077,16 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
   const range = document.getElementById('fromDate').value
     ? { from: document.getElementById('fromDate').value, to: document.getElementById('toDate').value || todayStr() }
     : getRange(currentRange);
-  loadDashboard(range);
+  const route = getRouteInfo();
+  if (route.view === 'compression' && route.project) {
+    loadCompressionDetail(route.project, range);
+  } else {
+    loadDashboard(range);
+  }
 });
 
-// Initial load
-loadDashboard(getRange('today'));
+// Initial load — route-aware
+initRoute();
 </script>
 </body>
 </html>

@@ -6,7 +6,7 @@ const path = require("path");
 const readline = require("readline");
 const os = require("os");
 const { calculateCost } = require("../shared/pricing");
-const { readLog, summarize, summarizeDaily } = require("../compressor/stats");
+const { readLog, summarize, summarizeDaily, summarizeByProject } = require("../compressor/stats");
 const { DEFAULT_PRICING } = require("../shared/pricing");
 
 const PORT = process.argv.includes("--port")
@@ -194,6 +194,7 @@ async function handleApi(req, res) {
     let entries = readLog();
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
+    const projectFilter = url.searchParams.get("project");
     if (from || to) {
       const start = from ? new Date(from) : new Date(0);
       const end = to ? new Date(to + "T23:59:59.999") : new Date();
@@ -202,12 +203,16 @@ async function handleApi(req, res) {
         return d >= start && d <= end;
       });
     }
+    if (projectFilter) {
+      entries = entries.filter((e) => e.project === projectFilter);
+    }
     const summary = summarize(entries);
     const dailySavings = summarizeDaily(entries);
+    const byProject = summarizeByProject(entries);
     // Also include recent individual runs
     const recent = entries.slice(-50).reverse();
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ summary, dailySavings, recent, totalEntries: entries.length, inputPricePerMTok: DEFAULT_PRICING.input }));
+    res.end(JSON.stringify({ summary, dailySavings, byProject, recent, totalEntries: entries.length, inputPricePerMTok: DEFAULT_PRICING.input }));
     return true;
   }
   if (url.pathname === "/api/refresh") {
