@@ -206,6 +206,7 @@
   }
 
   tr:hover td { background: var(--surface2); }
+  tr[data-compress-project]:hover td { background: var(--border); }
 
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.cost { color: var(--accent); font-weight: 600; text-align: right; }
@@ -269,51 +270,6 @@
   .heatmap .cell:hover {
     outline: 1px solid var(--accent);
     z-index: 1;
-  }
-
-  /* Project cards grid */
-  .project-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 12px;
-  }
-
-  .project-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    cursor: pointer;
-    transition: all 0.15s;
-    text-decoration: none;
-    color: inherit;
-    display: block;
-  }
-
-  .project-card:hover {
-    border-color: var(--accent);
-    background: var(--border);
-  }
-
-  .project-card .pc-name {
-    font-weight: 600;
-    font-size: 14px;
-    margin-bottom: 8px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .project-card .pc-stats {
-    display: flex;
-    gap: 16px;
-    font-size: 12px;
-    color: var(--text2);
-  }
-
-  .project-card .pc-stats .pc-saved {
-    color: var(--green);
-    font-weight: 600;
   }
 
   /* Back link */
@@ -462,11 +418,6 @@
             <h2 style="font-size:12px;">Recent Compressions</h2>
             <div class="table-wrap" id="compressRecent"></div>
           </div>
-        </div>
-        <!-- Projects box -->
-        <div style="margin-top:20px;">
-          <h2 style="font-size:12px;">Projects</h2>
-          <div class="project-cards" id="compressProjects"></div>
         </div>
       </div>
     </div>
@@ -711,26 +662,47 @@ function renderHeatmap(heatmap) {
   document.getElementById('heatmap').innerHTML = html;
 }
 
-function renderProjectsTable(projects) {
+function renderProjectsTable(projects, compressByProject) {
   if (!projects.length) {
     document.getElementById('projectsTable').innerHTML = '<p style="color:var(--text2);padding:20px;">No data</p>';
     return;
   }
+  // Build lookup: normalized project path → compress stats
+  const compressMap = {};
+  if (compressByProject) {
+    for (const cp of compressByProject) {
+      compressMap[normalizePath(cp.project)] = cp;
+    }
+  }
   const maxCost = projects[0]?.cost || 1;
-  let html = '<table><thead><tr><th>Project</th><th>Sessions</th><th>API Calls</th><th>Tokens</th><th style="text-align:right">Cost</th><th></th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>Project</th><th>Sessions</th><th>API Calls</th><th>Tokens</th><th style="text-align:right">Cost</th><th>Compressions</th><th style="text-align:right">Tokens Saved</th><th></th></tr></thead><tbody>';
   for (const p of projects) {
     const pct = (p.cost / maxCost * 100).toFixed(1);
-    html += `<tr>
+    const cp = compressMap[normalizePath(p.project)];
+    const runs = cp ? cp.runs : 0;
+    const saved = cp ? cp.savedTokens : 0;
+    const savedPct = cp && cp.originalTokens > 0 ? Math.round((cp.savedTokens / cp.originalTokens) * 100) : 0;
+    const savedDisplay = runs > 0 ? `<span style="color:var(--green)">${fmtNum(saved)} (${savedPct}%)</span>` : '<span style="color:var(--text2)">—</span>';
+    const runsDisplay = runs > 0 ? runs.toLocaleString() : '<span style="color:var(--text2)">—</span>';
+    const clickable = runs > 0 ? ` style="cursor:pointer" data-compress-project="${p.project}"` : '';
+    html += `<tr${clickable}>
       <td class="project-name" title="${p.project}">${shortProject(p.project)}</td>
       <td class="num">${p.sessions}</td>
       <td class="num">${p.apiCalls.toLocaleString()}</td>
       <td class="num">${fmtNum(p.tokens)}</td>
       <td class="cost">${fmtCost(p.cost)}</td>
+      <td class="num">${runsDisplay}</td>
+      <td class="num">${savedDisplay}</td>
       <td class="bar-cell"><div class="bar-bg" style="width:${pct}%"></div></td>
     </tr>`;
   }
   html += '</tbody></table>';
   document.getElementById('projectsTable').innerHTML = html;
+}
+
+function normalizePath(p) {
+  if (!p) return p;
+  return p.replace(/\\/g, '/').toLowerCase();
 }
 
 function renderDailyTable(daily) {
@@ -835,22 +807,6 @@ function renderCompressStats(data, totalCost) {
     document.getElementById('compressRecent').innerHTML = html;
   }
 
-  // Projects box
-  if (data.byProject && data.byProject.length) {
-    let html = '';
-    for (const p of data.byProject) {
-      const pctSaved = p.originalTokens > 0 ? Math.round((p.savedTokens / p.originalTokens) * 100) : 0;
-      const encodedProject = encodeURIComponent(p.project);
-      html += `<a class="project-card" href="/compression?project=${encodedProject}">
-        <div class="pc-name" title="${p.project}">${shortProject(p.project)}</div>
-        <div class="pc-stats">
-          <span>${p.runs} runs</span>
-          <span class="pc-saved">${fmtNum(p.savedTokens)} saved (${pctSaved}%)</span>
-        </div>
-      </a>`;
-    }
-    document.getElementById('compressProjects').innerHTML = html;
-  }
 }
 
 function renderCompressDailyChart(dailySavings) {
@@ -908,7 +864,7 @@ async function loadDashboard(range) {
     renderModelChart(data.models);
     renderTokenChart(data.summary);
     renderHeatmap(data.heatmap);
-    renderProjectsTable(data.projects);
+    renderProjectsTable(data.projects, compressData.byProject || []);
     renderDailyTable(data.daily);
     renderCompressStats(compressData, data.summary.totalCost);
   } catch (e) {
@@ -1016,16 +972,14 @@ window.addEventListener('popstate', () => {
 
 // Intercept project card clicks for SPA navigation
 document.addEventListener('click', (e) => {
-  const card = e.target.closest('.project-card');
-  if (card) {
-    e.preventDefault();
-    const href = card.getAttribute('href');
-    history.pushState(null, '', href);
-    const url = new URL(href, window.location.origin);
-    const project = url.searchParams.get('project');
-    if (project) {
-      loadCompressionDetail(project, getRange(currentRange));
-    }
+  // Handle project table row click for compression detail
+  const compressRow = e.target.closest('tr[data-compress-project]');
+  if (compressRow) {
+    const project = compressRow.getAttribute('data-compress-project');
+    const encodedProject = encodeURIComponent(project);
+    history.pushState(null, '', `/compression?project=${encodedProject}`);
+    loadCompressionDetail(project, getRange(currentRange));
+    return;
   }
   // Handle back link
   const backLink = e.target.closest('.back-link');
