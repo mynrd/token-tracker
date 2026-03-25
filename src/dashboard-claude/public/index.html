@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Token Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232736;
+    --border: #2d3148;
+    --text: #e2e4ed;
+    --text2: #8b8fa3;
+    --accent: #c49a6c;
+    --accent2: #8b6f4e;
+    --green: #4ade80;
+    --blue: #60a5fa;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+    --orange: #fb923c;
+    --red: #f87171;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header h1 .logo {
+    width: 28px;
+    height: 28px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--bg);
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .controls button, .controls select, .controls input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .controls button:hover, .controls select:hover {
+    background: var(--border);
+  }
+
+  .controls button.active {
+    background: var(--accent2);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .controls input[type="date"] {
+    width: 130px;
+  }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 32px;
+  }
+
+  /* Summary Cards */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .card .label {
+    font-size: 12px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .card .value {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .card .sub {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 4px;
+  }
+
+  .card.cost .value { color: var(--accent); }
+  .card.savings .value { color: var(--green); }
+
+  /* Grid layout */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .grid.full { grid-template-columns: 1fr; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    overflow: hidden;
+  }
+
+  .panel h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .chart-container {
+    position: relative;
+    height: 280px;
+  }
+
+  /* Table */
+  .table-wrap {
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    color: var(--text2);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tr:hover td { background: var(--surface2); }
+
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.cost { color: var(--accent); font-weight: 600; text-align: right; }
+
+  .project-name {
+    max-width: 350px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl;
+    text-align: left;
+  }
+
+  /* Bar in table */
+  .bar-cell {
+    position: relative;
+    min-width: 120px;
+  }
+
+  .bar-bg {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    bottom: 4px;
+    background: var(--accent2);
+    opacity: 0.25;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+
+  /* Heatmap */
+  .heatmap {
+    display: grid;
+    grid-template-columns: 40px repeat(24, 1fr);
+    gap: 2px;
+    font-size: 10px;
+  }
+
+  .heatmap .day-label {
+    display: flex;
+    align-items: center;
+    color: var(--text2);
+    font-size: 11px;
+  }
+
+  .heatmap .hour-label {
+    text-align: center;
+    color: var(--text2);
+    font-size: 10px;
+    padding: 2px;
+  }
+
+  .heatmap .cell {
+    aspect-ratio: 1;
+    border-radius: 3px;
+    min-height: 18px;
+    transition: all 0.2s;
+    cursor: default;
+    position: relative;
+  }
+
+  .heatmap .cell:hover {
+    outline: 1px solid var(--accent);
+    z-index: 1;
+  }
+
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text2);
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 12px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .refresh-btn {
+    background: none !important;
+    border: none !important;
+    font-size: 16px !important;
+    padding: 4px 8px !important;
+    opacity: 0.6;
+    transition: opacity 0.15s, transform 0.3s !important;
+  }
+
+  .refresh-btn:hover { opacity: 1 !important; }
+  .refresh-btn.spinning { animation: spin 0.8s linear infinite; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+    .header { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="logo">C</span> Claude Token Tracker</h1>
+  <div class="controls">
+    <button data-range="today" class="active">Today</button>
+    <button data-range="yesterday">Yesterday</button>
+    <button data-range="week">This Week</button>
+    <button data-range="month">This Month</button>
+    <button data-range="all">All Time</button>
+    <span style="color: var(--text2); margin: 0 4px;">|</span>
+    <input type="date" id="fromDate" title="From date">
+    <input type="date" id="toDate" title="To date">
+    <button id="applyRange">Apply</button>
+    <button class="refresh-btn" id="refreshBtn" title="Refresh data">&#x21bb;</button>
+  </div>
+</div>
+
+<div class="container">
+  <div id="loading" class="loading">
+    <div class="spinner"></div> Loading token data...
+  </div>
+
+  <div id="content" style="display: none;">
+    <!-- Summary Cards -->
+    <div class="cards" id="cards"></div>
+
+    <!-- Charts Row 1 -->
+    <div class="grid full">
+      <div class="panel">
+        <h2>Daily Cost</h2>
+        <div class="chart-container"><canvas id="dailyCostChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Cost by Model</h2>
+        <div class="chart-container"><canvas id="modelChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Token Breakdown</h2>
+        <div class="chart-container"><canvas id="tokenChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Activity Heatmap -->
+    <div class="grid full">
+      <div class="panel">
+        <h2>Activity Heatmap (Cost by Hour)</h2>
+        <div id="heatmap"></div>
+      </div>
+    </div>
+
+    <!-- Projects Table -->
+    <div class="grid full">
+      <div class="panel">
+        <h2>Projects</h2>
+        <div class="table-wrap" id="projectsTable"></div>
+      </div>
+    </div>
+
+    <!-- Daily Table -->
+    <div class="grid full">
+      <div class="panel">
+        <h2>Daily Breakdown</h2>
+        <div class="table-wrap" id="dailyTable"></div>
+      </div>
+    </div>
+
+    <!-- Compression Stats -->
+    <div class="grid full" id="compressSection" style="display:none;">
+      <div class="panel">
+        <h2>Compression Savings</h2>
+        <div class="cards" id="compressCards" style="margin-bottom:16px;"></div>
+        <div class="chart-container" style="margin-bottom:16px;"><canvas id="compressDailyChart"></canvas></div>
+        <div class="grid">
+          <div>
+            <h2 style="font-size:12px;">By Command</h2>
+            <div class="table-wrap" id="compressByCmd"></div>
+          </div>
+          <div>
+            <h2 style="font-size:12px;">Recent Compressions</h2>
+            <div class="table-wrap" id="compressRecent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/data';
+let charts = {};
+
+// --- Date helpers ---
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function yesterdayStr() {
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+function weekStartStr() {
+  const d = new Date(); d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
+}
+function monthStartStr() {
+  const d = new Date(); d.setDate(1);
+  return d.toISOString().slice(0, 10);
+}
+
+function getRange(preset) {
+  const today = todayStr();
+  switch (preset) {
+    case 'today': return { from: today, to: today };
+    case 'yesterday': return { from: yesterdayStr(), to: yesterdayStr() };
+    case 'week': return { from: weekStartStr(), to: today };
+    case 'month': return { from: monthStartStr(), to: today };
+    case 'all': return {};
+    default: return {};
+  }
+}
+
+// --- Format helpers ---
+function fmtNum(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n.toLocaleString();
+}
+
+function fmtCost(n) { return '$' + n.toFixed(2); }
+function fmtCostPrecise(n) { return '$' + n.toFixed(4); }
+
+function shortProject(p) {
+  const parts = p.replace(/\\/g, '/').split('/');
+  return parts.slice(-2).join('/');
+}
+
+// --- Fetch data ---
+async function fetchData(range) {
+  const params = new URLSearchParams();
+  if (range.from) params.set('from', range.from);
+  if (range.to) params.set('to', range.to);
+  const url = params.toString() ? `${API}?${params}` : API;
+  const res = await fetch(url);
+  return res.json();
+}
+
+// --- Render ---
+function renderCards(summary) {
+  const totalTokens = summary.inputTokens + summary.outputTokens + summary.cacheReadTokens + summary.cacheCreationTokens;
+  document.getElementById('cards').innerHTML = `
+    <div class="card cost">
+      <div class="label">Estimated Cost</div>
+      <div class="value">${fmtCost(summary.totalCost)}</div>
+      <div class="sub">${summary.apiCalls.toLocaleString()} API calls</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Tokens</div>
+      <div class="value">${fmtNum(totalTokens)}</div>
+      <div class="sub">Input: ${fmtNum(summary.inputTokens)} &middot; Output: ${fmtNum(summary.outputTokens)}</div>
+    </div>
+    <div class="card">
+      <div class="label">Cache Tokens</div>
+      <div class="value">${fmtNum(summary.cacheReadTokens)}</div>
+      <div class="sub">Read: ${fmtNum(summary.cacheReadTokens)} &middot; Create: ${fmtNum(summary.cacheCreationTokens)}</div>
+    </div>
+    <div class="card">
+      <div class="label">Sessions</div>
+      <div class="value">${summary.sessions.toLocaleString()}</div>
+      <div class="sub">${summary.apiCalls.toLocaleString()} API calls total</div>
+    </div>
+    <div class="card cost">
+      <div class="label">Cost / Session</div>
+      <div class="value">${summary.sessions > 0 ? fmtCost(summary.totalCost / summary.sessions) : '$0.00'}</div>
+      <div class="sub">${summary.sessions.toLocaleString()} sessions</div>
+    </div>
+    <div class="card">
+      <div class="label">Avg Tokens / Call</div>
+      <div class="value">${summary.apiCalls > 0 ? fmtNum(Math.round(totalTokens / summary.apiCalls)) : '0'}</div>
+      <div class="sub">${fmtNum(totalTokens)} across ${summary.apiCalls.toLocaleString()} calls</div>
+    </div>
+  `;
+}
+
+function renderDailyCostChart(daily) {
+  const ctx = document.getElementById('dailyCostChart');
+  if (charts.daily) charts.daily.destroy();
+  charts.daily = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: daily.map(d => d.date),
+      datasets: [{
+        label: 'Cost (USD)',
+        data: daily.map(d => d.cost),
+        backgroundColor: '#c49a6c44',
+        borderColor: '#c49a6c',
+        borderWidth: 1.5,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => fmtCostPrecise(ctx.parsed.y) + ' | ' + daily[ctx.dataIndex].apiCalls + ' calls'
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8b8fa3', maxRotation: 45 },
+          grid: { color: '#2d314822' }
+        },
+        y: {
+          ticks: { color: '#8b8fa3', callback: v => '$' + v.toFixed(0) },
+          grid: { color: '#2d314844' }
+        }
+      }
+    }
+  });
+}
+
+function renderModelChart(models) {
+  const ctx = document.getElementById('modelChart');
+  if (charts.model) charts.model.destroy();
+  const colors = ['#c49a6c', '#60a5fa', '#a78bfa', '#4ade80', '#fb923c', '#f472b6'];
+  charts.model = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: models.map(m => m.model),
+      datasets: [{
+        data: models.map(m => m.cost),
+        backgroundColor: colors.slice(0, models.length),
+        borderColor: '#1a1d27',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#e2e4ed', padding: 16, font: { size: 12 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.label + ': ' + fmtCost(ctx.parsed) + ' (' + fmtNum(models[ctx.dataIndex].tokens) + ' tokens)'
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderTokenChart(summary) {
+  const ctx = document.getElementById('tokenChart');
+  if (charts.token) charts.token.destroy();
+  charts.token = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Input', 'Output', 'Cache Read', 'Cache Create'],
+      datasets: [{
+        data: [summary.inputTokens, summary.outputTokens, summary.cacheReadTokens, summary.cacheCreationTokens],
+        backgroundColor: ['#60a5fa', '#4ade80', '#a78bfa', '#fb923c'],
+        borderColor: '#1a1d27',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#e2e4ed', padding: 16, font: { size: 12 } }
+        },
+        tooltip: {
+          callbacks: { label: ctx => ctx.label + ': ' + fmtNum(ctx.parsed) }
+        }
+      }
+    }
+  });
+}
+
+function renderHeatmap(heatmap) {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let maxVal = 0;
+  for (const row of heatmap) for (const v of row) if (v > maxVal) maxVal = v;
+
+  let html = '<div class="heatmap">';
+  // Header row
+  html += '<div></div>';
+  for (let h = 0; h < 24; h++) {
+    html += `<div class="hour-label">${h}</div>`;
+  }
+  // Data rows
+  for (let d = 0; d < 7; d++) {
+    html += `<div class="day-label">${days[d]}</div>`;
+    for (let h = 0; h < 24; h++) {
+      const v = heatmap[d][h];
+      const intensity = maxVal > 0 ? v / maxVal : 0;
+      const alpha = Math.max(0.05, intensity);
+      const bg = intensity > 0.01 ? `rgba(196, 154, 108, ${alpha})` : 'rgba(45, 49, 72, 0.3)';
+      html += `<div class="cell" style="background:${bg}" title="${days[d]} ${h}:00 — ${fmtCostPrecise(v)}"></div>`;
+    }
+  }
+  html += '</div>';
+  document.getElementById('heatmap').innerHTML = html;
+}
+
+function renderProjectsTable(projects) {
+  if (!projects.length) {
+    document.getElementById('projectsTable').innerHTML = '<p style="color:var(--text2);padding:20px;">No data</p>';
+    return;
+  }
+  const maxCost = projects[0]?.cost || 1;
+  let html = '<table><thead><tr><th>Project</th><th>Sessions</th><th>API Calls</th><th>Tokens</th><th style="text-align:right">Cost</th><th></th></tr></thead><tbody>';
+  for (const p of projects) {
+    const pct = (p.cost / maxCost * 100).toFixed(1);
+    html += `<tr>
+      <td class="project-name" title="${p.project}">${shortProject(p.project)}</td>
+      <td class="num">${p.sessions}</td>
+      <td class="num">${p.apiCalls.toLocaleString()}</td>
+      <td class="num">${fmtNum(p.tokens)}</td>
+      <td class="cost">${fmtCost(p.cost)}</td>
+      <td class="bar-cell"><div class="bar-bg" style="width:${pct}%"></div></td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('projectsTable').innerHTML = html;
+}
+
+function renderDailyTable(daily) {
+  if (!daily.length) {
+    document.getElementById('dailyTable').innerHTML = '<p style="color:var(--text2);padding:20px;">No data</p>';
+    return;
+  }
+  const reversed = [...daily].reverse();
+  let html = '<table><thead><tr><th>Date</th><th>Sessions</th><th>API Calls</th><th>Input</th><th>Output</th><th>Cache Read</th><th>Cache Create</th><th style="text-align:right">Cost</th></tr></thead><tbody>';
+  for (const d of reversed) {
+    html += `<tr>
+      <td>${d.date}</td>
+      <td class="num">${d.sessions}</td>
+      <td class="num">${d.apiCalls.toLocaleString()}</td>
+      <td class="num">${fmtNum(d.inputTokens)}</td>
+      <td class="num">${fmtNum(d.outputTokens)}</td>
+      <td class="num">${fmtNum(d.cacheReadTokens)}</td>
+      <td class="num">${fmtNum(d.cacheCreationTokens)}</td>
+      <td class="cost">${fmtCost(d.cost)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('dailyTable').innerHTML = html;
+}
+
+// --- Compression Stats ---
+async function fetchCompressStats(range) {
+  const params = new URLSearchParams();
+  if (range.from) params.set('from', range.from);
+  if (range.to) params.set('to', range.to);
+  const url = params.toString() ? `/api/compress-stats?${params}` : '/api/compress-stats';
+  const res = await fetch(url);
+  return res.json();
+}
+
+function renderCompressStats(data, totalCost) {
+  const section = document.getElementById('compressSection');
+  if (!data.summary || data.totalEntries === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  const s = data.summary;
+  const dollarSaved = (s.totalSavedTokens / 1_000_000) * (data.inputPricePerMTok || 3);
+  const potentialCost = totalCost + dollarSaved;
+  const savingsVsCostPercent = potentialCost > 0 ? ((dollarSaved / potentialCost) * 100).toFixed(1) : '0';
+
+  document.getElementById('compressCards').innerHTML = `
+    <div class="card savings">
+      <div class="label">Tokens Saved</div>
+      <div class="value">${fmtNum(s.totalSavedTokens)}</div>
+      <div class="sub">${s.overallSavingsPercent}% reduction ~ ${fmtCost(dollarSaved)} saved</div>
+    </div>
+    <div class="card">
+      <div class="label">Compressions</div>
+      <div class="value">${s.totalRuns.toLocaleString()}</div>
+      <div class="sub">${fmtNum(s.totalOriginalTokens)} original tokens</div>
+    </div>
+    <div class="card">
+      <div class="label">After Compression</div>
+      <div class="value">${fmtNum(s.totalCompressedTokens)}</div>
+      <div class="sub">${fmtNum(s.totalSavedTokens)} tokens eliminated</div>
+    </div>
+    <div class="card savings">
+      <div class="label">Savings vs Total Spend</div>
+      <div class="value">${savingsVsCostPercent}%</div>
+      <div class="sub">${fmtCost(dollarSaved)} saved of ${fmtCost(potentialCost)} potential</div>
+    </div>
+  `;
+
+  // By command table
+  if (s.byCommand && s.byCommand.length) {
+    let html = '<table><thead><tr><th>Command</th><th>Runs</th><th style="text-align:right">Tokens Saved</th></tr></thead><tbody>';
+    for (const c of s.byCommand) {
+      html += `<tr><td>${c.command}</td><td class="num">${c.runs.toLocaleString()}</td><td class="num" style="color:var(--green)">${fmtNum(c.savedTokens)}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('compressByCmd').innerHTML = html;
+  }
+
+  // Daily compression savings chart
+  if (data.dailySavings && data.dailySavings.length > 0) {
+    renderCompressDailyChart(data.dailySavings);
+  }
+
+  // Recent compressions table
+  if (data.recent && data.recent.length) {
+    let html = '<table><thead><tr><th>Time</th><th>Command</th><th>Before</th><th>After</th><th style="text-align:right">Saved</th></tr></thead><tbody>';
+    for (const r of data.recent.slice(0, 20)) {
+      const d = new Date(r.timestamp);
+      const localTime = d.toLocaleString([], { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+      const cmd = (r.command || '?').length > 25 ? (r.command || '?').slice(0, 22) + '...' : (r.command || '?');
+      html += `<tr>
+        <td>${localTime}</td>
+        <td>${cmd}</td>
+        <td class="num">${r.original.tokens}</td>
+        <td class="num">${r.compressed.tokens}</td>
+        <td class="num" style="color:var(--green)">${r.saved.tokens} (${r.savingsPercent}%)</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('compressRecent').innerHTML = html;
+  }
+}
+
+function renderCompressDailyChart(dailySavings) {
+  const ctx = document.getElementById('compressDailyChart');
+  if (charts.compressDaily) charts.compressDaily.destroy();
+  charts.compressDaily = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: dailySavings.map(d => d.date),
+      datasets: [{
+        label: 'Tokens Saved',
+        data: dailySavings.map(d => d.savedTokens),
+        backgroundColor: '#4ade8044',
+        borderColor: '#4ade80',
+        borderWidth: 1.5,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => fmtNum(ctx.parsed.y) + ' tokens saved | ' + dailySavings[ctx.dataIndex].runs + ' compressions'
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8b8fa3', maxRotation: 45 },
+          grid: { color: '#2d314822' }
+        },
+        y: {
+          ticks: { color: '#8b8fa3', callback: v => fmtNum(v) },
+          grid: { color: '#2d314844' }
+        }
+      }
+    }
+  });
+}
+
+async function loadDashboard(range) {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('content').style.display = 'none';
+  try {
+    const [data, compressData] = await Promise.all([
+      fetchData(range),
+      fetchCompressStats(range),
+    ]);
+    renderCards(data.summary);
+    renderDailyCostChart(data.daily);
+    renderModelChart(data.models);
+    renderTokenChart(data.summary);
+    renderHeatmap(data.heatmap);
+    renderProjectsTable(data.projects);
+    renderDailyTable(data.daily);
+    renderCompressStats(compressData, data.summary.totalCost);
+  } catch (e) {
+    console.error('Failed to load data:', e);
+  }
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+}
+
+// --- Event Handlers ---
+let currentRange = 'today';
+
+document.querySelectorAll('[data-range]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentRange = btn.dataset.range;
+    document.getElementById('fromDate').value = '';
+    document.getElementById('toDate').value = '';
+    loadDashboard(getRange(currentRange));
+  });
+});
+
+document.getElementById('applyRange').addEventListener('click', () => {
+  const from = document.getElementById('fromDate').value;
+  const to = document.getElementById('toDate').value;
+  if (from || to) {
+    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+    loadDashboard({ from, to: to || todayStr() });
+  }
+});
+
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  await fetch('/api/refresh');
+  btn.classList.remove('spinning');
+  const range = document.getElementById('fromDate').value
+    ? { from: document.getElementById('fromDate').value, to: document.getElementById('toDate').value || todayStr() }
+    : getRange(currentRange);
+  loadDashboard(range);
+});
+
+// Initial load
+loadDashboard(getRange('today'));
+</script>
+</body>
+</html>

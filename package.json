@@ -1,0 +1,24 @@
+{
+  "name": "claude-token-tracker",
+  "version": "2.0.0",
+  "description": "Track and reduce Claude Code token usage and costs",
+  "main": "src/tracker/index.js",
+  "bin": {
+    "claude-tokens": "./src/tracker/index.js",
+    "claude-compress": "./bin/compress.js"
+  },
+  "scripts": {
+    "dashboard": "node src/dashboard/server.js",
+    "start": "node src/tracker/index.js",
+    "today": "node src/tracker/index.js --today",
+    "week": "node src/tracker/index.js --week",
+    "month": "node src/tracker/index.js --month",
+    "projects": "node src/tracker/index.js --by-project",
+    "csv": "node src/tracker/index.js --csv",
+    "compress": "node bin/compress.js",
+    "stats": "node bin/stats.js",
+    "stats:today": "node bin/stats.js --today",
+    "stats:tail": "node bin/stats.js --tail 20",
+    "test": "node test/compressor.test.js"
+  }
+}
