@@ -45,25 +45,27 @@ function stripProgress(lines) {
 function dedup(lines) {
   const result = [];
   let lastLine = null;
+  let lastTrimmed = null;
   let count = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed === lastLine) {
+    if (trimmed === lastTrimmed) {
       count++;
     } else {
       if (count > 1) {
-        result.push(`  [x${count}] ${lastLine}`);
+        result.push(`  [x${count}] ${lastTrimmed}`);
       } else if (lastLine !== null) {
         result.push(lastLine);
       }
-      lastLine = trimmed;
+      lastLine = line;
+      lastTrimmed = trimmed;
       count = 1;
     }
   }
   // Flush last
   if (count > 1) {
-    result.push(`  [x${count}] ${lastLine}`);
+    result.push(`  [x${count}] ${lastTrimmed}`);
   } else if (lastLine !== null) {
     result.push(lastLine);
   }
@@ -108,6 +110,18 @@ function groupSimilar(lines) {
   let currentPrefix = null;
   let currentItems = [];
 
+  function flushGroup() {
+    if (currentItems.length > 3) {
+      groups.push(`${currentPrefix}: ${currentItems.slice(0, 2).join(", ")} (+${currentItems.length - 2} more)`);
+    } else {
+      for (const item of currentItems) {
+        groups.push(`${currentPrefix}: ${item}`);
+      }
+    }
+    currentPrefix = null;
+    currentItems = [];
+  }
+
   for (const line of lines) {
     const match = line.match(/^(\s*(?:modified|deleted|new file|renamed|copied|untracked|warning|error|PASS|FAIL)\s*:\s*)/i);
     if (match) {
@@ -115,39 +129,18 @@ function groupSimilar(lines) {
       if (prefix === currentPrefix) {
         currentItems.push(line.slice(match[1].length).trim());
       } else {
-        if (currentItems.length > 3) {
-          groups.push(`${currentPrefix}: ${currentItems.slice(0, 2).join(", ")} (+${currentItems.length - 2} more)`);
-        } else if (currentItems.length > 0) {
-          for (const item of currentItems) {
-            groups.push(`${currentPrefix}: ${item}`);
-          }
-        }
+        if (currentItems.length > 0) flushGroup();
         currentPrefix = prefix;
         currentItems = [line.slice(match[1].length).trim()];
       }
     } else {
-      // Flush current group
-      if (currentItems.length > 3) {
-        groups.push(`${currentPrefix}: ${currentItems.slice(0, 2).join(", ")} (+${currentItems.length - 2} more)`);
-      } else if (currentItems.length > 0) {
-        for (const item of currentItems) {
-          groups.push(`${currentPrefix}: ${item}`);
-        }
-      }
-      currentPrefix = null;
-      currentItems = [];
+      if (currentItems.length > 0) flushGroup();
       groups.push(line);
     }
   }
 
   // Flush remaining
-  if (currentItems.length > 3) {
-    groups.push(`${currentPrefix}: ${currentItems.slice(0, 2).join(", ")} (+${currentItems.length - 2} more)`);
-  } else if (currentItems.length > 0) {
-    for (const item of currentItems) {
-      groups.push(`${currentPrefix}: ${item}`);
-    }
-  }
+  if (currentItems.length > 0) flushGroup();
 
   return groups;
 }

@@ -9,6 +9,8 @@ const gitRules = require("./rules/git");
 const npmRules = require("./rules/npm");
 const dockerRules = require("./rules/docker");
 const dotnetRules = require("./rules/dotnet");
+const terraformRules = require("./rules/terraform");
+const kubectlRules = require("./rules/kubectl");
 const generalRules = require("./rules/general");
 const { buildStats, logStats } = require("./stats");
 
@@ -17,7 +19,9 @@ const commandRules = [
   { name: "npm", ...npmRules },
   { name: "docker", ...dockerRules },
   { name: "dotnet", ...dotnetRules },
-  { name: "general", ...generalRules },
+  { name: "terraform", ...terraformRules },
+  { name: "kubectl", ...kubectlRules },
+  { name: "general", ...generalRules },  // catch-all — must be last
 ];
 
 function compressOutput(text, command = "", options = {}) {
@@ -28,8 +32,13 @@ function compressOutput(text, command = "", options = {}) {
   // Find the first matching rule set
   for (const rules of commandRules) {
     if (rules.matches(cmd)) {
-      result = rules.compress(text, cmd);
-      ruleName = rules.name;
+      try {
+        result = rules.compress(text, cmd);
+        ruleName = rules.name;
+      } catch {
+        // Rule failed — fall through to generic compression
+        result = undefined;
+      }
       break;
     }
   }

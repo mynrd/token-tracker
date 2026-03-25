@@ -42,6 +42,15 @@ function buildStats(originalText, compressedText, command, ruleName, project) {
 function logStats(stats) {
   try {
     const logPath = getLogPath();
+    // Rotate when log exceeds 5 MB — keep the recent half
+    if (fs.existsSync(logPath)) {
+      const size = fs.statSync(logPath).size;
+      if (size > 5 * 1024 * 1024) {
+        const data = fs.readFileSync(logPath, "utf8");
+        const lines = data.trim().split("\n");
+        fs.writeFileSync(logPath, lines.slice(Math.floor(lines.length / 2)).join("\n") + "\n");
+      }
+    }
     fs.appendFileSync(logPath, JSON.stringify(stats) + "\n");
   } catch {
     // Silently fail — logging should never break compression

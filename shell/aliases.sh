@@ -11,6 +11,23 @@
 TOKENTRACKER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPRESS="node ${TOKENTRACKER_DIR}/bin/compress.js"
 
+# All commands to wrap — single source of truth for aliases and tt_off
+_TT_COMMANDS=(
+  git
+  npm yarn pnpm npx
+  docker docker-compose podman
+  dotnet msbuild
+  ng
+  tsc eslint htmlhint prettier cargo
+  azurite
+  pip pip3 python python3
+  az
+  terraform
+  sqlcmd sqlpackage
+  kubectl helm
+  curl
+)
+
 # Helper: wrap a command so its output is piped through the compressor
 _tt_wrap() {
   local cmd="$1"
@@ -21,63 +38,19 @@ _tt_wrap() {
   command "$cmd" "$@" 2>&1 | $COMPRESS "$full_cmd"
 }
 
-# --- Git ---
-alias git='_tt_wrap git'
-
-# --- npm/yarn/pnpm ---
-alias npm='_tt_wrap npm'
-alias yarn='_tt_wrap yarn'
-alias pnpm='_tt_wrap pnpm'
-alias npx='_tt_wrap npx'
-
-# --- Docker ---
-alias docker='_tt_wrap docker'
-alias docker-compose='_tt_wrap docker-compose'
-
-# --- .NET ---
-alias dotnet='_tt_wrap dotnet'
-alias msbuild='_tt_wrap msbuild'
-
-# --- Angular ---
-alias ng='_tt_wrap ng'
-
-# --- Build / Lint tools ---
-alias tsc='_tt_wrap tsc'
-alias eslint='_tt_wrap eslint'
-alias htmlhint='_tt_wrap htmlhint'
-alias prettier='_tt_wrap prettier'
-alias cargo='_tt_wrap cargo'
-
-# --- Azure Storage Emulator ---
-alias azurite='_tt_wrap azurite'
-
-# --- Python ---
-alias pip='_tt_wrap pip'
-alias pip3='_tt_wrap pip3'
-alias python='_tt_wrap python'
-alias python3='_tt_wrap python3'
-
-# --- Azure CLI ---
-alias az='_tt_wrap az'
-
-# --- Terraform ---
-alias terraform='_tt_wrap terraform'
-
-# --- SQL ---
-alias sqlcmd='_tt_wrap sqlcmd'
-alias sqlpackage='_tt_wrap sqlpackage'
-
-# --- Kubernetes ---
-alias kubectl='_tt_wrap kubectl'
-alias helm='_tt_wrap helm'
-
-# --- General ---
-alias curl='_tt_wrap curl'
+# Register all aliases from the list
+for _cmd in "${_TT_COMMANDS[@]}"; do
+  alias "$_cmd=_tt_wrap $_cmd"
+done
+unset _cmd
 
 # --- Control ---
 # Temporarily disable compression
 tt_off() {
-  unalias git npm yarn pnpm npx docker docker-compose dotnet msbuild ng tsc eslint htmlhint prettier cargo azurite pip pip3 python python3 az terraform sqlcmd sqlpackage kubectl helm curl 2>/dev/null
+  for _cmd in "${_TT_COMMANDS[@]}"; do
+    unalias "$_cmd" 2>/dev/null
+  done
+  unset _cmd
   echo "  Token compression disabled."
 }
 
