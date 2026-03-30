@@ -13,6 +13,8 @@ function compress(text, cmd) {
   if (/docker\s+(ps|container\s+ls)/.test(cmd)) return compressPs(lines);
   if (/docker\s+logs/.test(cmd)) return compressLogs(lines);
   if (/docker\s+(pull|push)/.test(cmd)) return compressPullPush(lines);
+  if (/docker\s+run/.test(cmd)) return compressRun(lines);
+  if (/docker\s+exec/.test(cmd)) return compressExec(lines);
 
   lines = collapseBlankLines(lines);
   lines = truncate(lines, 60);
@@ -61,6 +63,21 @@ function compressLogs(lines) {
   lines = collapseBlankLines(lines);
   lines = dedup(lines);
   return truncate(lines, 50).join("\n");
+}
+
+function compressRun(lines) {
+  // docker run — strip pull progress, keep actual container output
+  const filtered = lines.filter((l) => {
+    const t = l.trim();
+    return !t.match(/^[a-f0-9]+:\s*(Pulling|Waiting|Pull complete|Already exists)/) &&
+      !t.match(/^\s*\d+(\.\d+)?[kKmMgG]?B\//);
+  });
+  return truncate(collapseBlankLines(filtered), 50).join("\n");
+}
+
+function compressExec(lines) {
+  // docker exec — keep all output, just truncate and collapse blanks
+  return truncate(collapseBlankLines(lines), 50).join("\n");
 }
 
 function compressPullPush(lines) {

@@ -104,6 +104,14 @@ function compressTest(lines) {
     if (failMatch) failed = parseInt(failMatch[1]);
     const skipMatch = t.match(/(\d+) pending|(\d+) skipped/);
     if (skipMatch) skipped = parseInt(skipMatch[1] || skipMatch[2]);
+
+    // Vitest format: "Tests  2 failed | 5 passed (7)"
+    const vitestMatch = t.match(/^Tests\s+(?:(\d+) failed\s*\|\s*)?(?:(\d+) passed\s*)?(?:\((\d+)\))?/);
+    if (vitestMatch && (vitestMatch[1] || vitestMatch[2])) {
+      if (vitestMatch[1]) failed = parseInt(vitestMatch[1]);
+      if (vitestMatch[2]) passed = parseInt(vitestMatch[2]);
+      if (vitestMatch[3]) passed = passed || parseInt(vitestMatch[3]);
+    }
   }
 
   if (passed || failed || skipped) {

@@ -107,9 +107,10 @@ function compressApply(lines) {
 
   for (const line of lines) {
     const t = line.trim();
-    if (t.includes("created")) created++;
-    else if (t.includes("configured")) configured++;
-    else if (t.includes("unchanged")) unchanged++;
+    // Match kubectl apply output: "resource/name created|configured|unchanged"
+    if (t.match(/\screated$/)) created++;
+    else if (t.match(/\sconfigured$/)) configured++;
+    else if (t.match(/\sunchanged$/)) unchanged++;
 
     // Keep error/warning lines
     if (t.startsWith("error:") || t.startsWith("Error") || t.startsWith("Warning")) {

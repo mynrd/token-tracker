@@ -120,6 +120,59 @@ const longResult = compressOutput(longInput, "some-command");
 assert("truncation: caps output", longResult, (r) => r.split("\n").length <= 82);
 assert("truncation: shows omitted count", longResult, "lines omitted");
 
+// --- Vitest test format ---
+const vitestTestInput = `
+ ✓ src/utils.test.ts (3)
+ × src/auth.test.ts (1)
+
+Test Files  1 failed | 1 passed (2)
+Tests  1 failed | 3 passed (4)
+Duration  2.34s (transform 45ms, setup 2ms, collect 89ms, tests 2.2s)
+`;
+const vitestResult = compressOutput(vitestTestInput, "npm test");
+assert("vitest: has passed count", vitestResult, "3 passed");
+assert("vitest: has failed count", vitestResult, "1 failed");
+
+// --- dotnet build with NETSDK error ---
+const dotnetNetsdk = `Build FAILED.
+
+D:\\app\\App.csproj : error NETSDK1004: Assets file not found. Run a NuGet package restore.
+    1 Error(s)
+    0 Warning(s)`;
+const dotnetNetssdkResult = compressOutput(dotnetNetsdk, "dotnet build");
+assert("dotnet: captures NETSDK error code", dotnetNetssdkResult, "NETSDK1004");
+assert("dotnet: reports BUILD FAILED", dotnetNetssdkResult, "BUILD FAILED");
+
+// --- dotnet format ---
+const dotnetFormatInput = `  Formatted code file 'src/Program.cs'.
+  Formatted code file 'src/Startup.cs'.
+  Formatted 2 of 2 files.`;
+const dotnetFormatResult = compressOutput(dotnetFormatInput, "dotnet format");
+assert("dotnet format: keeps formatted file lines", dotnetFormatResult, "Program.cs");
+
+// --- kubectl apply precise counting ---
+const kubectlApplyInput = `deployment.apps/web created
+service/web created
+configmap/config configured
+ingress.networking.k8s.io/web unchanged
+Error: something about created objects could not be validated`;
+const kubectlApplyResult = compressOutput(kubectlApplyInput, "kubectl apply");
+assert("kubectl apply: counts created correctly", kubectlApplyResult, "2 created");
+assert("kubectl apply: counts configured correctly", kubectlApplyResult, "1 configured");
+assert("kubectl apply: counts unchanged correctly", kubectlApplyResult, "1 unchanged");
+assert("kubectl apply: does not overcount from error line", kubectlApplyResult, (r) => !r.includes("3 created"));
+
+// --- docker run ---
+const dockerRunInput = `Unable to find image 'alpine:latest' locally
+latest: Pulling from library/alpine
+abc123: Pulling fs layer
+abc123: Pull complete
+Hello from Docker!
+Container output line 2`;
+const dockerRunResult = compressOutput(dockerRunInput, "docker run alpine echo hi");
+assert("docker run: strips pull progress", dockerRunResult, (r) => !r.includes("Pulling fs layer"));
+assert("docker run: keeps container output", dockerRunResult, "Hello from Docker!");
+
 // --- Results ---
 console.log(`\n  Compressor Tests: ${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);

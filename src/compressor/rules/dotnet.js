@@ -13,6 +13,9 @@ function compress(text, cmd) {
   if (/^dotnet\s+ef\s/.test(cmd)) return compressEf(lines);
   if (/^dotnet\s+(restore|add|remove|nuget)/.test(cmd)) return compressRestore(lines);
   if (/^dotnet\s+run/.test(cmd)) return compressRun(lines);
+  if (/^dotnet\s+format/.test(cmd)) return compressFormat(lines);
+  if (/^dotnet\s+watch/.test(cmd)) return compressWatch(lines);
+  if (/^dotnet\s+(clean|list)/.test(cmd)) return compressCleanOrList(lines);
 
   // Generic dotnet compression
   lines = stripDotnetNoise(lines);
@@ -57,8 +60,8 @@ function compressBuild(lines) {
     const warnMatch = t.match(/(\d+) Warning\(s\)/);
     if (warnMatch) warnings = parseInt(warnMatch[1]);
 
-    // Capture actual error/warning messages (CS/MSB codes)
-    if (t.match(/:\s*(error|warning)\s+(CS|MSB|NU)\d+/i)) {
+    // Capture actual error/warning messages (CS/MSB/NU/NETSDK/CA/IDE/BC codes)
+    if (t.match(/:\s*(error|warning)\s+(CS|MSB|NU|NETSDK|CA|IDE|BC)\d+/i)) {
       errorLines.push(t);
     }
 
@@ -174,6 +177,41 @@ function compressRun(lines) {
   const cleaned = stripDotnetNoise(lines);
   const filtered = collapseBlankLines(cleaned);
   return truncate(filtered, 60).join("\n");
+}
+
+function compressFormat(lines) {
+  // Keep formatted file paths and the completion/error lines
+  const result = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    if (t.match(/Formatted\s+\d+|No files|Format complete/i)) {
+      result.push(t);
+    } else if (t.match(/\.(cs|vb|fs|csproj|vbproj|fsproj)['".\s]/i) || t.match(/\.(cs|vb|fs|csproj|vbproj|fsproj)$/i)) {
+      result.push(t);
+    } else if (t.match(/error|warning/i)) {
+      result.push(t);
+    }
+  }
+  return result.length ? result.join("\n") : "format completed";
+}
+
+function compressWatch(lines) {
+  // Strip repeated build noise from dotnet watch, keep actual application output
+  const result = [];
+  for (const line of lines) {
+    const t = line.trim();
+    // Skip watch-specific noise
+    if (t.match(/^watch\s*:/i)) continue;
+    result.push(line);
+  }
+  const cleaned = stripDotnetNoise(result);
+  return truncate(collapseBlankLines(cleaned), 60).join("\n");
+}
+
+function compressCleanOrList(lines) {
+  const cleaned = stripDotnetNoise(lines);
+  return truncate(collapseBlankLines(cleaned), 40).join("\n");
 }
 
 module.exports = { matches, compress };

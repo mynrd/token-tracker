@@ -1,12 +1,5 @@
 const { stripAnsi, collapseBlankLines, truncate, dedup } = require("../filters");
 
-const GIT_COMMANDS = [
-  "git status", "git log", "git diff", "git show", "git branch",
-  "git stash", "git pull", "git push", "git fetch", "git merge",
-  "git rebase", "git cherry-pick", "git blame", "git remote",
-  "git tag", "git checkout", "git switch", "git restore",
-];
-
 function matches(cmd) {
   return cmd.startsWith("git ");
 }
